@@ -1,0 +1,12 @@
+body {
+    margin: 0;
+    padding: 20px;
+    background-color: rgb(18, 19, 20); /* Changed from #f0f0f0 */
+    font-family: Arial, sans-serif;
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 20px;
+}
