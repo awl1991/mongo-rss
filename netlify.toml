@@ -1,0 +1,31 @@
+[build]
+  command = "npm run build"
+  publish = "out"
+  functions = "netlify/functions"
+
+[build.environment]
+  # Environment variables can be set here or in the Netlify UI
+  # MONGODB_URI and MONGODB_DB should be set in Netlify UI environment variables
+
+# Scheduled function for fetching headlines every 5 minutes
+[functions.scheduled-fetch-headlines]
+  schedule = "*/5 * * * *"
+  path = "/netlify/functions/scheduled-fetch-headlines"
+
+# Scheduled function for database cleanup
+[functions.scheduled-cleanup]
+  schedule = "0 2 * * *"  # Run at 2 AM every day
+  path = "/netlify/functions/scheduled-cleanup"
+
+# Function configuration for API endpoints
+[functions]
+  directory = "netlify/functions"
+
+# Redirects for API endpoints
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

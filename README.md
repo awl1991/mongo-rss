@@ -4,13 +4,13 @@ A Next.js application for fetching and displaying political headlines from vario
 
 ## Overview
 
-This application fetches headlines from multiple political news sources, filters them based on relevant keywords, and displays them in a responsive UI. The application has been optimized for deployment on Vercel's serverless platform.
+This application fetches headlines from multiple political news sources, filters them based on relevant keywords, and displays them in a responsive UI. The application has been optimized for deployment on Netlify's serverless platform.
 
 ## Features
 
 - Fetches headlines from multiple RSS feeds
 - Filters headlines based on political relevance
-- Updates headlines periodically using Vercel cron jobs (every 5 minutes)
+- Updates headlines every 5 minutes using Netlify scheduled functions
 - Daily cleanup of all headlines at 2 AM
 - Responsive UI with search functionality
 - MongoDB Atlas integration for persistent storage
@@ -19,7 +19,7 @@ This application fetches headlines from multiple political news sources, filters
 
 - Node.js 18.x or higher
 - MongoDB Atlas account
-- Vercel account (for deployment)
+- Netlify account (for deployment)
 
 ## Local Development
 
@@ -51,57 +51,54 @@ MONGODB_DB=headlines_db
 npm install
 ```
 
-4. **Run the development server**
+4. **Run the development server with Netlify CLI**
 
 ```bash
-npm run dev
+npm run netlify-dev
 ```
 
-The application should now be running at [http://localhost:3000](http://localhost:3000).
+This will start the Netlify dev environment, which includes both the Next.js application and the Netlify functions.
 
-## Vercel Deployment
+The application should now be running at [http://localhost:8888](http://localhost:8888).
 
-1. **Install Vercel CLI (optional)**
+## Netlify Deployment
+
+1. **Install Netlify CLI (if not already installed)**
 
 ```bash
-npm install -g vercel
+npm install -g netlify-cli
 ```
 
-2. **Deploy to Vercel**
+2. **Deploy to Netlify**
 
-You can deploy directly from the Vercel dashboard by connecting your Git repository, or use the CLI:
+You can deploy directly from the Netlify dashboard by connecting your Git repository, or use the CLI:
 
 ```bash
-vercel
+netlify deploy --prod
 ```
 
-3. **Configure Environment Variables on Vercel**
+3. **Configure Environment Variables on Netlify**
 
-In the Vercel dashboard, go to your project settings and add the following environment variables:
+In the Netlify dashboard, go to Site settings > Environment variables and add the following:
 
 - `MONGODB_URI`: Your MongoDB Atlas connection string
 - `MONGODB_DB`: The name of your MongoDB database (e.g., `headlines_db`)
 
-4. **Cron Job Configuration**
+4. **Scheduled Functions Configuration**
 
-The application uses Vercel Cron Jobs to periodically fetch new headlines. This is configured in the `vercel.json` file:
+The application uses Netlify Scheduled Functions to periodically fetch new headlines. This is configured in the `netlify.toml` file:
 
-```json
-{
-  "crons": [
-    {
-      "path": "/api/fetchHeadlines",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/fetchHeadlines?cleanup=all",
-      "schedule": "0 2 * * *"
-    }
-  ]
-}
+```toml
+[functions.scheduled-fetch-headlines]
+  schedule = "*/5 * * * *"
+  path = "/netlify/functions/scheduled-fetch-headlines"
+
+[functions.scheduled-cleanup]
+  schedule = "0 2 * * *"  # Run at 2 AM every day
+  path = "/netlify/functions/scheduled-cleanup"
 ```
 
-This configures two cron jobs:
+This configures two scheduled functions:
 - Every 5 minutes: Fetch new headlines
 - Daily at 2:00 AM: Delete ALL headlines from the database
 
@@ -147,9 +144,9 @@ This application is configured to:
 
 - `lib/`: Core libraries for database, RSS fetching, and utilities
 - `pages/`: Next.js pages and API routes
-- `pages/api/`: API endpoints for fetching headlines
+- `netlify/functions/`: Netlify serverless functions for API endpoints and scheduled tasks
 - `styles/`: CSS modules for styling
-- `vercel.json`: Vercel configuration for cron jobs
+- `netlify.toml`: Netlify configuration for build settings and scheduled functions
 
 ## License
 
