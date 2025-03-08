@@ -62,11 +62,11 @@ export default function Home() {
                 if (brandNewHeadlines.length > 0) {
                     console.log(`Found ${brandNewHeadlines.length} new headlines`);
                     
-                    // Merge, sort, and limit to 200
+                    // Merge, sort, and limit to 500
                     const mergedHeadlines = [...brandNewHeadlines, ...prevHeadlines];
                     const sortedHeadlines = mergedHeadlines
                         .sort((a, b) => new Date(b.pub_time_raw) - new Date(a.pub_time_raw))
-                        .slice(0, 200);
+                        .slice(0, 500);
                     
                     // Update the current fetch time if we have new headlines
                     if (brandNewHeadlines.length > 0) {

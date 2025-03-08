@@ -55,7 +55,7 @@ exports.handler = async (event, context) => {
         );
         
         // Race between the actual query and the timeout
-        rows = await Promise.race([getHeadlines(200), timeout]);
+        rows = await Promise.race([getHeadlines(500), timeout]);
       } catch (queryError) {
         console.error("MongoDB query error:", queryError);
         return {
