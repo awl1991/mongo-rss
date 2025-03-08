@@ -32,8 +32,33 @@ export default function Home() {
                 throw new Error(errorDetails);
             }
             
-            const newHeadlines = await response.json();
-            const validHeadlines = newHeadlines.filter(h => h.headline && h.pub_time_raw);
+            let newHeadlines;
+            try {
+                newHeadlines = await response.json();
+                
+                // Ensure we have an array to work with
+                if (!Array.isArray(newHeadlines)) {
+                    console.error("Expected array but received:", typeof newHeadlines);
+                    // If we receive an object with error details, show it
+                    if (newHeadlines && newHeadlines.error) {
+                        setError(`API error: ${newHeadlines.error}`);
+                    } else {
+                        setError("Invalid data format received from API");
+                    }
+                    return; // Exit function on error
+                }
+            } catch (parseError) {
+                console.error("JSON parse error:", parseError);
+                setError(`Failed to parse API response: ${parseError.message}`);
+                return; // Exit function on parse error
+            }
+            
+            const validHeadlines = newHeadlines.filter(h => h && h.headline && h.pub_time_raw);
+            
+            // Log if we filtered out any invalid headlines
+            if (validHeadlines.length < newHeadlines.length) {
+                console.warn(`Filtered out ${newHeadlines.length - validHeadlines.length} invalid headlines`);
+            }
             
             setHeadlines(prevHeadlines => {
                 // If this is the first fetch, just set the headlines
@@ -101,18 +126,59 @@ export default function Home() {
         }
     }, []);
 
+    // Function to fetch new headlines directly from RSS feeds
+    const fetchFreshHeadlines = useCallback(async () => {
+        console.log("Fetching fresh headlines from RSS sources...");
+        try {
+            const response = await fetch('/api/fetchHeadlines');
+            const data = await response.json();
+            console.log("Fresh headlines fetch result:", data);
+            
+            // After fetching fresh headlines, get the updated list
+            fetchHeadlines();
+        } catch (error) {
+            console.error("Error fetching fresh headlines:", error);
+            // Fall back to just fetching from database
+            fetchHeadlines();
+        }
+    }, [fetchHeadlines]);
+
     useEffect(() => {
         // Restore last fetch time from localStorage
         const storedFetchTime = typeof window !== 'undefined' ? localStorage.getItem('lastFetchTime') || '0' : '0';
         setLastFetchTime(storedFetchTime);
 
-        // Initialize fetcher and get initial headlines
+        // Check if this is a page refresh by using performance navigation type
+        const isPageRefresh = typeof window !== 'undefined' && 
+            window.performance && 
+            window.performance.navigation && 
+            window.performance.navigation.type === 1;
+            
+        // Create a key for session storage to track initial page load vs. refresh
+        const pageLoadKey = 'initialPageLoad';
+        const isFirstLoad = typeof window !== 'undefined' && !sessionStorage.getItem(pageLoadKey);
+        
+        if (typeof window !== 'undefined') {
+            sessionStorage.setItem(pageLoadKey, 'loaded');
+        }
+
+        // Initialize fetcher
         fetch('/api/initFetcher')
             .then(res => res.json())
             .then(data => {
                 console.log(data.message);
-                // Initial fetch after initializing fetcher
-                fetchHeadlines();
+                
+                // For page refresh, fetch fresh headlines from RSS
+                if (isPageRefresh) {
+                    console.log("Page refresh detected - fetching fresh headlines");
+                    fetchFreshHeadlines();
+                } else if (isFirstLoad) {
+                    console.log("Initial page load - using cached headlines");
+                    fetchHeadlines();
+                } else {
+                    console.log("Normal navigation - using cached headlines");
+                    fetchHeadlines();
+                }
             })
             .catch(err => {
                 console.error("Error initializing fetcher:", err);
@@ -131,7 +197,7 @@ export default function Home() {
         return () => {
             clearInterval(pollingInterval);
         };
-    }, [fetchHeadlines]);
+    }, [fetchHeadlines, fetchFreshHeadlines]);
 
     // Update filtered headlines whenever headlines or searchTerm changes
     useEffect(() => {

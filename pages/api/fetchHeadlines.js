@@ -16,11 +16,27 @@ export default async function handler(req, res) {
 
             // Regular headline fetching
             const result = await fetchHeadlines();
-            res.status(200).json({ 
-                message: "Headlines fetched successfully",
-                newHeadlinesCount: result.newHeadlinesCount,
-                newSources: result.newSources 
-            });
+            
+            // Ensure result is serializable
+            try {
+                // Create a clean, serializable response object
+                const response = {
+                    message: "Headlines fetched successfully",
+                    newHeadlinesCount: typeof result.newHeadlinesCount === 'number' ? result.newHeadlinesCount : 0,
+                    newSources: Array.isArray(result.newSources) ? result.newSources.map(s => String(s)) : []
+                };
+                
+                // Test serialization before sending
+                JSON.stringify(response);
+                
+                res.status(200).json(response);
+            } catch (serializationError) {
+                console.error("JSON serialization error:", serializationError);
+                res.status(500).json({
+                    error: "Failed to serialize response",
+                    details: serializationError.message
+                });
+            }
         } catch (error) {
             console.error("Error in headlines operation:", error);
             res.status(500).json({ error: error.message || "Error processing request" });

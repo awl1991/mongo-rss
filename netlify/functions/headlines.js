@@ -55,7 +55,7 @@ exports.handler = async (event, context) => {
         );
         
         // Race between the actual query and the timeout
-        rows = await Promise.race([getHeadlines(500), timeout]);
+        rows = await Promise.race([getHeadlines(10000), timeout]);
       } catch (queryError) {
         console.error("MongoDB query error:", queryError);
         return {
@@ -74,16 +74,19 @@ exports.handler = async (event, context) => {
         console.log(`Retrieved ${rows.length} headlines from database`);
       }
 
-      // Update the cache
-      cachedHeadlines = rows.map(h => ({
-        headline: h.headline,
-        link: h.link,
-        source: h.source,
-        pub_time: formatDatetimeToCentral(h.pub_time),
-        fetch_time: formatDatetimeToCentral(h.fetch_time),
-        is_new: isNewHeadline(h.pub_time),
-        pub_time_raw: h.pub_time // Include raw ISO for sorting
-      }));
+      // Update the cache - ensure all data is serializable
+      cachedHeadlines = rows.map(h => {
+        // Create a clean, serializable object
+        return {
+          headline: String(h.headline || ''),
+          link: String(h.link || ''),
+          source: String(h.source || ''),
+          pub_time: formatDatetimeToCentral(h.pub_time),
+          fetch_time: formatDatetimeToCentral(h.fetch_time),
+          is_new: Boolean(isNewHeadline(h.pub_time)),
+          pub_time_raw: String(h.pub_time || '') // Include raw ISO for sorting
+        };
+      });
       
       // Update the last fetch time
       lastFetchTime = now;
@@ -100,14 +103,33 @@ exports.handler = async (event, context) => {
       console.log(`Next database refresh in ${minutesRemaining}m ${secondsRemaining}s`);
     }
     
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache' // Ensure browsers don't cache the response
-      },
-      body: JSON.stringify(cachedHeadlines)
-    };
+    try {
+      // Validate that our data is serializable
+      const serializedData = JSON.stringify(cachedHeadlines);
+      
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache' // Ensure browsers don't cache the response
+        },
+        body: serializedData
+      };
+    } catch (serializationError) {
+      console.error("JSON serialization error:", serializationError);
+      
+      // Return error with sanitized message
+      return {
+        statusCode: 500,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          error: "Failed to serialize response data",
+          details: serializationError.message
+        })
+      };
+    }
   } catch (error) {
     console.error("Error fetching headlines:", error);
     
