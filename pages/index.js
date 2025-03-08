@@ -9,13 +9,27 @@ export default function Home() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filteredHeadlines, setFilteredHeadlines] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     // Function to fetch headlines
     const fetchHeadlines = useCallback(async () => {
         try {
             const response = await fetch('/api/headlines');
             if (!response.ok) {
-                throw new Error(`HTTP error: ${response.status}`);
+                // Try to extract detailed error information from the response
+                let errorDetails = `HTTP error: ${response.status}`;
+                try {
+                    const errorData = await response.json();
+                    if (errorData.error) {
+                        errorDetails = `${errorData.error}${errorData.details ? ': ' + errorData.details : ''}${errorData.code ? ' (Code: ' + errorData.code + ')' : ''}`;
+                    }
+                } catch (e) {
+                    // If we can't parse the JSON, just use the status
+                    console.error("Could not parse error response:", e);
+                }
+                
+                setError(errorDetails);
+                throw new Error(errorDetails);
             }
             
             const newHeadlines = await response.json();
@@ -79,9 +93,11 @@ export default function Home() {
             });
             
             setLoading(false);
+            setError(null); // Clear any previous errors on success
         } catch (error) {
             console.error("Error fetching headlines:", error);
             setLoading(false);
+            // Error is already set in the HTTP error handling above
         }
     }, []);
 
@@ -100,6 +116,7 @@ export default function Home() {
             })
             .catch(err => {
                 console.error("Error initializing fetcher:", err);
+                setError(`Failed to initialize: ${err.message}`);
                 // Try to fetch headlines anyway
                 fetchHeadlines();
             });
@@ -132,7 +149,7 @@ export default function Home() {
         setSearchTerm(value);
     };
 
-    if (!headlines) return <div className={styles.noHeadlines}>Loading...</div>;
+    if (loading && !headlines.length) return <div className={styles.noHeadlines}>Loading headlines...</div>;
 
     return (
         <div>
@@ -148,6 +165,16 @@ export default function Home() {
                     />
                 </div>
             </div>
+            
+            {/* Display error message if there is one */}
+            {error && (
+                <div className={styles.errorMessage || 'error-message'}>
+                    <h3>Error Loading Headlines</h3>
+                    <p>{error}</p>
+                    <p>Please check your connection and try again. If the issue persists, contact support.</p>
+                </div>
+            )}
+            
             <div className={styles.tileContainer}>
                 {filteredHeadlines.length > 0 ? (
                     filteredHeadlines.map((headline, index) => {
@@ -179,7 +206,9 @@ export default function Home() {
                         );
                     })
                 ) : (
-                    <p className={styles.noHeadlines}>No headlines available.</p>
+                    <p className={styles.noHeadlines}>
+                        {loading ? "Loading headlines..." : "No headlines available."}
+                    </p>
                 )}
             </div>
         </div>
