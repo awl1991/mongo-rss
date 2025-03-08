@@ -20,10 +20,19 @@ export default function Home() {
         return isNetlify ? `/.netlify/functions/${endpoint}` : `/api/${endpoint}`;
     };
 
-    // Function to fetch headlines
+    // Function to fetch headlines with timeout
     const fetchHeadlines = useCallback(async () => {
         try {
-            const response = await fetch(getApiPath('headlines'));
+            // Create a promise that resolves after 5 seconds (timeout)
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Request timeout')), 5000);
+            });
+            
+            // Create the actual fetch request
+            const fetchPromise = fetch(getApiPath('headlines'));
+            
+            // Race between fetch and timeout
+            const response = await Promise.race([fetchPromise, timeoutPromise]);
             if (!response.ok) {
                 // Try to extract detailed error information from the response
                 let errorDetails = `HTTP error: ${response.status}`;
@@ -152,6 +161,7 @@ export default function Home() {
         }
     }, [fetchHeadlines]);
 
+    // Effect for initial data load and background refreshing
     useEffect(() => {
         // Restore last fetch time from localStorage
         const storedFetchTime = typeof window !== 'undefined' ? localStorage.getItem('lastFetchTime') || '0' : '0';
@@ -171,36 +181,44 @@ export default function Home() {
             sessionStorage.setItem(pageLoadKey, 'loaded');
         }
 
-        // Initialize fetcher
-        fetch(getApiPath('init-fetcher'))
-            .then(res => res.json())
-            .then(data => {
-                console.log(data.message);
-                
-                // For page refresh, fetch fresh headlines from RSS
-                if (isPageRefresh) {
-                    console.log("Page refresh detected - fetching fresh headlines");
-                    fetchFreshHeadlines();
-                } else if (isFirstLoad) {
-                    console.log("Initial page load - using cached headlines");
-                    fetchHeadlines();
-                } else {
-                    console.log("Normal navigation - using cached headlines");
-                    fetchHeadlines();
-                }
-            })
-            .catch(err => {
-                console.error("Error initializing fetcher:", err);
-                setError(`Failed to initialize: ${err.message}`);
-                // Try to fetch headlines anyway
-                fetchHeadlines();
-            });
+        // Always fetch headlines immediately to show content as quickly as possible
+        fetchHeadlines().then(() => {
+            console.log("Initial headlines loaded");
+        }).catch(err => {
+            console.error("Error loading initial headlines:", err);
+        });
+        
+        // Initialize fetcher in the background
+        setTimeout(() => {
+            fetch(getApiPath('init-fetcher'))
+                .then(res => res.json())
+                .then(data => {
+                    console.log(data.message);
+                    
+                    // For page refresh, fetch fresh headlines from RSS
+                    if (isPageRefresh) {
+                        console.log("Page refresh detected - fetching fresh headlines");
+                        fetchFreshHeadlines();
+                    } else if (isFirstLoad) {
+                        console.log("Initial page load - refreshing headlines");
+                        fetchHeadlines();
+                    }
+                })
+                .catch(err => {
+                    console.error("Error initializing fetcher:", err);
+                    // Error is handled, but we already loaded headlines above
+                });
+        }, 100); // Small delay to prioritize initial render
 
-        // Set up polling for new headlines (every 15 seconds)
+        // Set up polling for new headlines (every 10 seconds)
         const pollingInterval = setInterval(() => {
             console.log("Polling for new headlines...");
-            fetchHeadlines();
-        }, 15000); // 15 seconds
+            fetchHeadlines().catch(err => {
+                console.error("Error during headline polling:", err);
+                // Error is logged but we don't need to show it to the user
+                // since this is a background refresh
+            });
+        }, 10000); // 10 seconds (reduced from 15)
         
         // Set up polling for fresh RSS headlines (every 5 minutes)
         const rssFetchInterval = setInterval(() => {
