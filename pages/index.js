@@ -11,10 +11,19 @@ export default function Home() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // Function to determine correct API path based on environment
+    const getApiPath = (endpoint) => {
+        // Check if we're in the Netlify environment
+        const isNetlify = typeof window !== 'undefined' && 
+            window.location.hostname.includes('netlify.app');
+        
+        return isNetlify ? `/.netlify/functions/${endpoint}` : `/api/${endpoint}`;
+    };
+
     // Function to fetch headlines
     const fetchHeadlines = useCallback(async () => {
         try {
-            const response = await fetch('/api/headlines');
+            const response = await fetch(getApiPath('headlines'));
             if (!response.ok) {
                 // Try to extract detailed error information from the response
                 let errorDetails = `HTTP error: ${response.status}`;
@@ -130,7 +139,7 @@ export default function Home() {
     const fetchFreshHeadlines = useCallback(async () => {
         console.log("Fetching fresh headlines from RSS sources...");
         try {
-            const response = await fetch('/api/fetchHeadlines');
+            const response = await fetch(getApiPath('scheduled-fetch-headlines'));
             const data = await response.json();
             console.log("Fresh headlines fetch result:", data);
             
@@ -163,7 +172,7 @@ export default function Home() {
         }
 
         // Initialize fetcher
-        fetch('/api/initFetcher')
+        fetch(getApiPath('init-fetcher'))
             .then(res => res.json())
             .then(data => {
                 console.log(data.message);
@@ -196,7 +205,7 @@ export default function Home() {
         // Set up polling for fresh RSS headlines (every 5 minutes)
         const rssFetchInterval = setInterval(() => {
             console.log("Triggering fresh RSS headline fetch...");
-            fetch('/api/initFetcher')
+            fetch(getApiPath('init-fetcher'))
                 .then(res => res.json())
                 .then(data => {
                     console.log("Fresh RSS fetch result:", data);
