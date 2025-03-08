@@ -26,28 +26,58 @@ exports.handler = async (event, context) => {
       timeoutPromise(9000)
     ]);
     
+    // Create a sanitized response object to ensure it's serializable
+    const sanitizedResponse = {
+      message: "Initial fetch completed successfully",
+      newHeadlinesCount: typeof result.newHeadlinesCount === 'number' ? result.newHeadlinesCount : 0,
+      newSources: Array.isArray(result.newSources) ? result.newSources.map(s => String(s)) : [],
+      optimized: true
+    };
+    
+    // Test serialization before returning
+    try {
+      const serializedData = JSON.stringify(sanitizedResponse);
+      
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: serializedData
+      };
+    } catch (serializationError) {
+      console.error("JSON serialization error:", serializationError);
+      return {
+        statusCode: 500,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          error: "Failed to serialize response",
+          details: serializationError.message
+        })
+      };
+    }
+  } catch (error) {
+    console.error("Error in initial fetch:", error.message);
+    
+    // Determine the type of error
+    const isTimeout = error.message && error.message.includes('Timeout after');
+    const isDbConnectionError = error.message && (
+      error.message.includes('MongoNetworkError') || 
+      error.message.includes('failed to connect') ||
+      error.message.includes('ECONNREFUSED')
+    );
+    
     return {
-      statusCode: 200,
+      statusCode: isTimeout ? 408 : (isDbConnectionError ? 503 : 500),
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ 
-        message: "Initial fetch completed successfully",
-        newHeadlinesCount: result.newHeadlinesCount, 
-        newSources: result.newSources,
-        optimized: true
-      })
-    };
-  } catch (error) {
-    console.error("Error in initial fetch:", error.message);
-    
-    // Determine if it was a timeout
-    const isTimeout = error.message && error.message.includes('Timeout after');
-    
-    return {
-      statusCode: isTimeout ? 408 : 500,
-      body: JSON.stringify({ 
-        error: isTimeout ? "Function timed out" : "Error in initial fetch",
+        error: isTimeout ? 
+          "Function timed out" : 
+          (isDbConnectionError ? "Database connection error" : "Error in initial fetch"),
         message: error.message
       })
     };

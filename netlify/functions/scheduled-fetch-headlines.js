@@ -23,26 +23,57 @@ exports.handler = async (event, context) => {
       timeoutPromise(9000)
     ]);
     
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        message: "Headlines fetched successfully",
-        newHeadlinesCount: result.newHeadlinesCount,
-        newSources: result.newSources,
-        triggeredBy: isScheduledEvent ? 'schedule' : 'http',
-        optimized: true
-      })
+    // Create a sanitized response object to ensure it's serializable
+    const sanitizedResponse = {
+      message: "Headlines fetched successfully",
+      newHeadlinesCount: typeof result.newHeadlinesCount === 'number' ? result.newHeadlinesCount : 0,
+      newSources: Array.isArray(result.newSources) ? result.newSources.map(s => String(s)) : [],
+      triggeredBy: isScheduledEvent ? 'schedule' : 'http',
+      optimized: true
     };
+    
+    // Test serialization before returning
+    try {
+      const serializedData = JSON.stringify(sanitizedResponse);
+      
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: serializedData
+      };
+    } catch (serializationError) {
+      console.error("JSON serialization error:", serializationError);
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: "Failed to serialize response",
+          details: serializationError.message,
+          triggeredBy: isScheduledEvent ? 'schedule' : 'http'
+        })
+      };
+    }
   } catch (error) {
     console.error("Error fetching headlines:", error.message);
     
-    // Determine if it was a timeout
+    // Determine the type of error
     const isTimeout = error.message && error.message.includes('Timeout after');
+    const isDbConnectionError = error.message && (
+      error.message.includes('MongoNetworkError') || 
+      error.message.includes('failed to connect') ||
+      error.message.includes('ECONNREFUSED')
+    );
     
     return {
-      statusCode: isTimeout ? 408 : 500,
+      statusCode: isTimeout ? 408 : (isDbConnectionError ? 503 : 500),
+      headers: {
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({
-        error: isTimeout ? "Function timed out" : "Error processing request",
+        error: isTimeout ? 
+          "Function timed out" : 
+          (isDbConnectionError ? "Database connection error" : "Error processing request"),
         message: error.message,
         triggeredBy: isScheduledEvent ? 'schedule' : 'http'
       })
