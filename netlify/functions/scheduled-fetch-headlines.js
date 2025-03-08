@@ -1,5 +1,12 @@
 const { fetchHeadlines } = require('../../lib/fetcher');
 
+// Helper function to create a promise that rejects after a timeout
+function timeoutPromise(ms) {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms);
+  });
+}
+
 // Handler for scheduled event and HTTP requests
 exports.handler = async (event, context) => {
   // Check if this is a scheduled event
@@ -9,8 +16,12 @@ exports.handler = async (event, context) => {
   console.log(`Trigger type: ${isScheduledEvent ? 'Scheduled Event' : 'HTTP Request'}`);
   
   try {
-    // Execute the same fetchHeadlines function we were using in Vercel
-    const result = await fetchHeadlines();
+    // Create a promise race between our function and a timeout
+    // The timeout is set to 9 seconds to ensure we finish before Netlify's 10-second limit
+    const result = await Promise.race([
+      fetchHeadlines(),
+      timeoutPromise(9000)
+    ]);
     
     return {
       statusCode: 200,
@@ -18,16 +29,22 @@ exports.handler = async (event, context) => {
         message: "Headlines fetched successfully",
         newHeadlinesCount: result.newHeadlinesCount,
         newSources: result.newSources,
-        triggeredBy: isScheduledEvent ? 'schedule' : 'http'
+        triggeredBy: isScheduledEvent ? 'schedule' : 'http',
+        optimized: true
       })
     };
   } catch (error) {
-    console.error("Error fetching headlines:", error);
+    console.error("Error fetching headlines:", error.message);
+    
+    // Determine if it was a timeout
+    const isTimeout = error.message && error.message.includes('Timeout after');
     
     return {
-      statusCode: 500,
+      statusCode: isTimeout ? 408 : 500,
       body: JSON.stringify({
-        error: error.message || "Error processing request"
+        error: isTimeout ? "Function timed out" : "Error processing request",
+        message: error.message,
+        triggeredBy: isScheduledEvent ? 'schedule' : 'http'
       })
     };
   }
