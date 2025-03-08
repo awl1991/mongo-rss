@@ -192,10 +192,25 @@ export default function Home() {
             console.log("Polling for new headlines...");
             fetchHeadlines();
         }, 15000); // 15 seconds
+        
+        // Set up polling for fresh RSS headlines (every 5 minutes)
+        const rssFetchInterval = setInterval(() => {
+            console.log("Triggering fresh RSS headline fetch...");
+            fetch('/api/initFetcher')
+                .then(res => res.json())
+                .then(data => {
+                    console.log("Fresh RSS fetch result:", data);
+                    if (data.newHeadlinesCount > 0) {
+                        console.log(`Added ${data.newHeadlinesCount} new headlines from sources: ${data.newSources.join(', ')}`);
+                    }
+                })
+                .catch(err => console.error("Error fetching fresh RSS headlines:", err));
+        }, 300000); // 5 minutes (300,000 ms)
 
         // Clean up on component unmount
         return () => {
             clearInterval(pollingInterval);
+            clearInterval(rssFetchInterval);
         };
     }, [fetchHeadlines, fetchFreshHeadlines]);
 
