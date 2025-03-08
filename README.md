@@ -84,23 +84,49 @@ In the Netlify dashboard, go to Site settings > Environment variables and add th
 - `MONGODB_URI`: Your MongoDB Atlas connection string
 - `MONGODB_DB`: The name of your MongoDB database (e.g., `headlines_db`)
 
-4. **Scheduled Functions Configuration**
+4. **Netlify Configuration**
 
-The application uses Netlify Scheduled Functions to periodically fetch new headlines. This is configured in the `netlify.toml` file:
+The application is configured for Netlify deployment in the `netlify.toml` file:
 
 ```toml
+[build]
+  command = "npm run build"
+  publish = ".next"
+  functions = "netlify/functions"
+
+[build.environment]
+  # Environment variables can be set here or in the Netlify UI
+  # MONGODB_URI and MONGODB_DB should be set in Netlify UI environment variables
+  # Skip the automatic check for .next directory if next export is used
+  NETLIFY_NEXT_PLUGIN_SKIP = "false"
+
+# Scheduled function for fetching headlines every 5 minutes
 [functions.scheduled-fetch-headlines]
   schedule = "*/5 * * * *"
   path = "/netlify/functions/scheduled-fetch-headlines"
 
+# Scheduled function for database cleanup
 [functions.scheduled-cleanup]
   schedule = "0 2 * * *"  # Run at 2 AM every day
   path = "/netlify/functions/scheduled-cleanup"
+
+# Redirects for API endpoints
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
 ```
 
-This configures two scheduled functions:
-- Every 5 minutes: Fetch new headlines
-- Daily at 2:00 AM: Delete ALL headlines from the database
+This configuration:
+- Sets the build output directory to `.next` (standard Next.js output)
+- Configures two scheduled functions:
+  - Every 5 minutes: Fetch new headlines
+  - Daily at 2:00 AM: Delete ALL headlines from the database
+- Sets up redirects to route API requests to Netlify functions
+- Includes the Next.js plugin for Netlify
 
 ## MongoDB Atlas Setup (Detailed)
 
